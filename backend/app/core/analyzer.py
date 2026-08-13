@@ -6,6 +6,7 @@ agent's history reflects every pass, not just the ones that found something.
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import datetime
 from typing import Callable
@@ -37,6 +38,18 @@ ProgressCallback = Callable[[str, dict], None] | None
 # node_and_bucket_stats/close) so gather_stats() below doesn't need to know
 # which kind of cluster it's looking at.
 AnyClusterClient = ClusterClient | BundleClusterClient
+
+# asyncio only holds a weak reference to a bare create_task() result -- with
+# nothing else referencing it, the task can be garbage-collected mid-flight.
+# Keeping a strong reference here until each one finishes avoids background
+# query-rewrite drafts silently vanishing under load.
+_background_tasks: set[asyncio.Task] = set()
+
+
+def _spawn_background(coro) -> None:
+    task = asyncio.create_task(coro)
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
 
 
 def _make_client(cluster: Cluster) -> AnyClusterClient:
@@ -95,9 +108,19 @@ def _topic_for_finding(finding: Finding) -> str:
     return "query_monitoring"
 
 
+def _is_system_catalog_query(row: dict) -> bool:
+    return "system:" in (row.get("statement") or "").lower()
+
+
 async def gather_stats(client: AnyClusterClient, lookback: int) -> ClusterStats:
+    # ClusterClient.completed_requests() already excludes these at the SQL
+    # level (see its WHERE clause) -- this is defense-in-depth so the same
+    # guarantee holds for BundleClusterClient (support-bundle snapshots),
+    # which just returns whatever a cbcollect_info archive captured verbatim
+    # and can't apply that filter itself.
+    completed_requests = [r for r in client.completed_requests(lookback) if not _is_system_catalog_query(r)]
     return ClusterStats(
-        completed_requests=client.completed_requests(lookback),
+        completed_requests=completed_requests,
         index_catalog=client.index_catalog(),
         resource_stats=await client.node_and_bucket_stats(),
         bucket_names=client.bucket_names(),
@@ -148,6 +171,42 @@ async def _sandbox_test(finding: Finding, stats: ClusterStats) -> SandboxTestRes
     )
 
 
+async def _draft_query_suggestion_background(
+    finding_id: UUID, store: StateStore, on_progress: ProgressCallback
+) -> None:
+    """Runs the local-LLM query rewrite after the finding has already been
+    saved and broadcast, instead of inline in the main analysis loop. A
+    cluster with a dozen REQUIRES_CODE_CHANGE findings in one pass was
+    turning every pass into a dozen sequential LLM completions -- multiple
+    minutes blocking finding visibility, the 'run now' HTTP response (and the
+    dashboard navigation hanging off it), and the next scheduled pass. None
+    of that needs to wait on this; it's an optional annotation, not part of
+    what makes the finding itself useful."""
+    current = await store.get_finding(finding_id)
+    if not current:
+        return
+    try:
+        suggestion = await suggest_optimized_query(current)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Background query rewrite failed for finding %s: %s", finding_id, exc)
+        return
+    if not suggestion:
+        return
+
+    # Re-fetch rather than reuse `current` -- the finding may have been
+    # approved/rejected/updated while the LLM call was in flight.
+    latest = await store.get_finding(finding_id)
+    if not latest:
+        return
+    latest.suggested_query = suggestion
+    await store.save_finding(latest)
+    if on_progress:
+        on_progress(
+            "finding_updated",
+            {"cluster_id": str(latest.cluster_id), "finding": latest.model_dump(mode="json")},
+        )
+
+
 async def run_analysis(cluster: Cluster, on_progress: ProgressCallback = None) -> AnalysisRunSummary:
     settings = get_settings()
     started = datetime.utcnow()
@@ -196,11 +255,14 @@ async def run_analysis(cluster: Cluster, on_progress: ProgressCallback = None) -
             finding.status = FindingStatus.PENDING_APPROVAL
         else:
             finding.status = FindingStatus.SUGGESTED
-            _emit_activity(on_progress, cluster, "validating", f"Drafting an optimized query for '{finding.title}'")
-            finding.suggested_query = await suggest_optimized_query(finding)
 
         await store.save_finding(finding)
         created += 1
+
+        if finding.action_type == ActionType.REQUIRES_CODE_CHANGE:
+            # Fire-and-forget: see _draft_query_suggestion_background's
+            # docstring for why this must not block the pass.
+            _spawn_background(_draft_query_suggestion_background(finding.finding_id, store, on_progress))
 
         try:
             await memory.remember(

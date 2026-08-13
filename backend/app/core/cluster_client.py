@@ -101,7 +101,16 @@ class ClusterClient:
             "SELECT statement, elapsedTime, serviceTime, resultCount, resultSize, "
             "scanConsistency, state, requestTime, phaseCounts, phaseTimes, preparedText, "
             "errorCount, node, usedMemory "
-            f"FROM system:completed_requests ORDER BY requestTime DESC LIMIT {int(limit)}"
+            "FROM system:completed_requests "
+            # Exclude the agent's own introspection queries (this one included, plus
+            # index_catalog()'s system:indexes query, etc.) -- left in, they get
+            # analyzed as if they were application traffic (a primary scan against
+            # the system: pseudo-keyspace has no index to fix, so the rule engine
+            # was raising nonsense "Primary index scan on `system`" findings), and
+            # they crowd real application query history out of this bounded,
+            # LIMIT'd window over repeated analysis passes.
+            "WHERE LOWER(IFMISSINGORNULL(statement, '')) NOT LIKE '%system:%' "
+            f"ORDER BY requestTime DESC LIMIT {int(limit)}"
         )
         try:
             return [dict(row) for row in sdk.query(q).execute()]

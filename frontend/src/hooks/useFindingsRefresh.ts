@@ -2,13 +2,15 @@ import { useEffect } from "react";
 import { useAgentSocket } from "./useAgentSocket";
 
 const REFRESH_EVENT_TYPES = new Set([
-  "finding", "finding_approved", "finding_applied", "finding_rejected", "analysis_complete",
+  "finding", "finding_updated", "finding_approved", "finding_applied", "finding_rejected", "analysis_complete",
 ]);
 
 /**
  * Re-runs `onRefresh` whenever a WebSocket event arrives that means this
  * cluster's findings may have changed: a new finding raised during an
- * analysis pass, an approve/reject/apply action, or a full pass completing.
+ * analysis pass, an approve/reject/apply action, a full pass completing, or
+ * a background-drafted query rewrite ("finding_updated") landing on a
+ * finding a moment after it was first raised.
  *
  * Without this, any page that only fetches findings once on mount/cluster-
  * change (Dashboard, Insights, Pending Approval, Applied History, Needs Code

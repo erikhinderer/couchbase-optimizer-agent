@@ -16,6 +16,7 @@ best-effort and never raises.
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from app.core.llm_client import LLMClient
@@ -23,6 +24,15 @@ from app.models.enums import ActionType
 from app.models.schemas import Finding
 
 logger = logging.getLogger(__name__)
+
+# A cluster with many code-change findings in one pass (JOINs, LIKE,
+# SELECT *, timeouts, ...) can easily have a dozen of these fire at once.
+# Most local LLM services (Ollama and similar) only run one inference at a
+# time on a single model anyway, so a handful of concurrent requests just
+# queue politely server-side rather than actually running in parallel -- this
+# cap just keeps us from opening a pile of simultaneous httpx connections to
+# it for no benefit.
+_CONCURRENCY = asyncio.Semaphore(3)
 
 SYSTEM_PROMPT = """You are a Couchbase SQL++ (N1QL) query optimization expert helping rewrite a \
 specific slow or inefficient query. You will be given the problem that was detected, a description \
@@ -75,7 +85,8 @@ async def suggest_optimized_query(finding: Finding) -> str | None:
         return None
 
     try:
-        raw = await LLMClient().chat(SYSTEM_PROMPT, _user_prompt(finding, str(sample_statement)))
+        async with _CONCURRENCY:
+            raw = await LLMClient().chat(SYSTEM_PROMPT, _user_prompt(finding, str(sample_statement)))
     except Exception as exc:  # noqa: BLE001
         logger.warning("Query rewrite suggestion failed for finding %s: %s", finding.finding_id, exc)
         return None

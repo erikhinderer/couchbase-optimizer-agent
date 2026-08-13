@@ -40,7 +40,7 @@ export default function App() {
   }, [selectedClusterId]);
 
   useEffect(() => {
-    if (lastEvent && ["finding", "finding_approved", "finding_applied", "finding_rejected", "analysis_complete"].includes(lastEvent.type)) {
+    if (lastEvent && ["finding", "finding_updated", "finding_approved", "finding_applied", "finding_rejected", "analysis_complete"].includes(lastEvent.type)) {
       loadFindings();
     }
     // A cluster registered/deleted from another tab or a previous session's
