@@ -41,7 +41,12 @@ so nothing can be applied and nothing will change until a newer bundle is upload
 - If you don't have enough grounding to answer confidently, say what you'd need (e.g. "run an \
 analysis pass first") rather than guessing.
 - Keep answers focused and specific to what was asked; use the findings/memory context, don't \
-just restate it."""
+just restate it.
+- For REQUIRES_CODE_CHANGE findings, you may explain and recommend a concrete rewritten query, not \
+just describe the problem in the abstract. If a finding below already has a drafted rewrite, use it \
+as your basis (you can refine or re-explain it) rather than starting over; if it doesn't, you can \
+draft one yourself from the original query shown. Always make clear this is a suggestion for the \
+application team to apply themselves -- you're not changing anything by saying it."""
 
 
 def _format_memories(memories: dict[str, list[dict]]) -> str:
@@ -65,6 +70,17 @@ def _format_findings(findings: list[Finding]) -> str:
             f"  - [{f.severity.value.upper()}/{f.category.value}/{f.action_type.value}] {f.title} "
             f"(status: {f.status.value})"
         )
+        # Give the model enough to explain and recommend a rewrite on request
+        # without having to invent the original query or the fix from the
+        # one-line summary above.
+        if f.action_type.value == "requires_code_change":
+            sample_statement = (f.evidence or {}).get("sample_statement")
+            if f.code_change_guidance:
+                lines.append(f"      guidance: {f.code_change_guidance}")
+            if sample_statement:
+                lines.append(f"      original query: {str(sample_statement)[:400]}")
+            if f.suggested_query:
+                lines.append(f"      already-drafted rewrite: {f.suggested_query[:600]}")
     return "\n".join(lines)
 
 

@@ -135,6 +135,12 @@ class Finding(BaseModel):
     suggested_action: Optional[dict[str, Any]] = None
     # For REQUIRES_CODE_CHANGE findings: what the application team needs to do.
     code_change_guidance: Optional[str] = None
+    # Best-effort rewritten/optimized query text for REQUIRES_CODE_CHANGE
+    # findings that have a sample statement to work from (see
+    # core/query_rewriter.py). Explanatory only -- like code_change_guidance,
+    # the agent never applies this itself; the application team still owns
+    # the actual change.
+    suggested_query: Optional[str] = None
     doc_references: list[DocReference] = Field(default_factory=list)
     sandbox_test_result: Optional[SandboxTestResult] = None
     detected_at: datetime = Field(default_factory=datetime.utcnow)

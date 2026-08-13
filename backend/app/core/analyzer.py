@@ -17,6 +17,7 @@ from app.config import get_settings
 from app.core.bundle_client import BundleClusterClient
 from app.core.cluster_client import ClusterClient
 from app.core.docs_client import enrich_references
+from app.core.query_rewriter import suggest_optimized_query
 from app.core.rules import index_rules, query_rules, resource_rules
 from app.core.rules.base import ClusterStats
 from app.core.sandbox_client import SandboxClient
@@ -195,6 +196,8 @@ async def run_analysis(cluster: Cluster, on_progress: ProgressCallback = None) -
             finding.status = FindingStatus.PENDING_APPROVAL
         else:
             finding.status = FindingStatus.SUGGESTED
+            _emit_activity(on_progress, cluster, "validating", f"Drafting an optimized query for '{finding.title}'")
+            finding.suggested_query = await suggest_optimized_query(finding)
 
         await store.save_finding(finding)
         created += 1

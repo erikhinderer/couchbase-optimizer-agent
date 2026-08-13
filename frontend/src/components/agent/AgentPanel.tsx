@@ -55,6 +55,47 @@ export default function AgentPanel() {
     setTurns((prev) => [...prev, findingTurn(finding)]);
   }, [lastEvent, selectedClusterId]);
 
+  // When a scan (manual or scheduled) finishes, tell the user what came of
+  // it and what to do next, instead of leaving them to notice the finding
+  // count changed on its own.
+  useEffect(() => {
+    if (!lastEvent || lastEvent.type !== "analysis_complete") return;
+    const summary = lastEvent.payload as
+      | {
+          cluster_id?: string;
+          findings_created?: number;
+          findings_updated?: number;
+          queries_examined?: number;
+          indexes_examined?: number;
+        }
+      | undefined;
+    if (!summary || !selectedClusterId || summary.cluster_id !== selectedClusterId) return;
+
+    const created = summary.findings_created ?? 0;
+    const updated = summary.findings_updated ?? 0;
+    const queries = summary.queries_examined ?? 0;
+    const indexes = summary.indexes_examined ?? 0;
+
+    const content =
+      created + updated === 0
+        ? `Scan complete -- examined ${queries} queries and ${indexes} indexes. No new or recurring issues found, nothing needs your attention right now.`
+        : `Scan complete -- examined ${queries} queries and ${indexes} indexes. ` +
+          [
+            created ? `${created} new finding${created === 1 ? "" : "s"}` : null,
+            updated ? `${updated} recurring finding${updated === 1 ? "" : "s"} updated` : null,
+          ]
+            .filter(Boolean)
+            .join(", ") +
+          ".\n\nWhat to do next:\n" +
+          "- Dashboard -- highest-severity findings\n" +
+          "- Pending Approval -- safe fixes I can auto-apply\n" +
+          "- Needs Code Change -- fixes that need an application-side change\n" +
+          "- Insights -- the full list";
+
+    setOpen(true);
+    setTurns((prev) => [...prev, { role: "assistant", content }]);
+  }, [lastEvent, selectedClusterId]);
+
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
   }, [turns, sending]);

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Route, Routes } from "react-router-dom";
+import { Route, Routes, useNavigate } from "react-router-dom";
 import { api } from "@/api/client";
 import type { Finding } from "@/api/types";
 import { AgentWordmark } from "@/assets/Logo";
@@ -24,6 +24,7 @@ export default function App() {
   const { selectedClusterId, setSelectedClusterId, clusters, refreshClusters } = useAppStore();
   const [findings, setFindings] = useState<Finding[]>([]);
   const { lastEvent } = useAgentSocket();
+  const navigate = useNavigate();
 
   async function loadFindings() {
     if (!selectedClusterId) return;
@@ -48,6 +49,14 @@ export default function App() {
     // list hasn't drifted from what the backend actually has.
     if (lastEvent && lastEvent.type === "analysis_complete") {
       refreshClusters();
+      // Surface results as soon as a scan (manual or scheduled) finishes,
+      // rather than leaving the user on whatever page they happened to be
+      // on -- the chat panel explains what was found, this makes sure the
+      // findings themselves are the first thing they see.
+      const eventClusterId = lastEvent.payload?.cluster_id;
+      if (!selectedClusterId || eventClusterId === selectedClusterId) {
+        navigate("/");
+      }
     }
   }, [lastEvent]);
 

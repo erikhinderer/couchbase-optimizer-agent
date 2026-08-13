@@ -63,6 +63,7 @@ export interface Finding {
   evidence: Record<string, unknown>;
   suggested_action?: Record<string, unknown> | null;
   code_change_guidance?: string | null;
+  suggested_query?: string | null;
   doc_references: DocReference[];
   sandbox_test_result?: SandboxTestResult | null;
   detected_at: string;

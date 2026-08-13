@@ -91,6 +91,23 @@ export default function FindingCard({ finding, onChanged }: { finding: Finding; 
         </div>
       )}
 
+      {finding.suggested_query && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          <div style={{ fontSize: 11, textTransform: "uppercase", color: "var(--cb-amber)", fontWeight: 700 }}>
+            Suggested optimized query
+          </div>
+          <div style={{
+            fontFamily: "monospace", fontSize: 11.5, background: "var(--bg-2)", border: "1px solid var(--border-subtle)",
+            borderRadius: 8, padding: 9, whiteSpace: "pre-wrap", wordBreak: "break-word",
+          }}>
+            {finding.suggested_query}
+          </div>
+          <div style={{ fontSize: 10.5, color: "var(--text-muted)" }}>
+            Drafted by the agent -- review before use. The application team still owns making this change.
+          </div>
+        </div>
+      )}
+
       {finding.sandbox_test_result && (
         <div style={{ display: "flex", alignItems: "flex-start", gap: 6, fontSize: 11.5, color: "var(--text-secondary)" }}>
           <FlaskConical size={13} style={{ marginTop: 1, flexShrink: 0 }} />

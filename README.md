@@ -4,9 +4,6 @@ A dockerized AI agent with a dashboard UI that continuously analyzes Couchbase E
 Couchbase Capella clusters, surfaces optimization opportunities, and safely applies the ones that
 need no application code change -- with a named-approver sign-off before anything runs.
 
-<img width="3456" height="1930" alt="image" src="https://github.com/user-attachments/assets/53ff957f-7397-4a44-92f6-6d9bedd1ddc9" />
-
-
 ## Capabilities
 
 - **Continuous analysis.** A background scheduler re-analyzes every registered cluster on a fixed
@@ -22,7 +19,11 @@ need no application code change -- with a named-approver sign-off before anythin
 - **Code-change suggestions.** Findings the agent can't safely act on itself (large result
   payloads, unprojected `SELECT *`, sustained high CPU, complex WHERE clauses) are classified
   `REQUIRES_CODE_CHANGE` and land in **Needs Code Change** with an explanation of what the
-  application team needs to do -- the agent explains, it doesn't rewrite your queries for you.
+  application team needs to do. For findings with a captured query, the agent also drafts a
+  suggested rewrite (via the local LLM, grounded in the original statement and the same guidance
+  shown alongside it) -- shown right on the finding and available to ask about in chat. This is
+  always a suggestion to review, not an applied change: the agent can't touch application code, so
+  the team still owns making (and testing) the actual edit.
 - **Documentation citations.** Every finding and every chat answer that leans on documentation
   shows a source link back to docs.couchbase.com underneath it, so a recommendation can be
   independently validated rather than taken on faith.
