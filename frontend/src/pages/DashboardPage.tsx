@@ -9,6 +9,12 @@ import ScanTypeChart from "@/components/charts/ScanTypeChart";
 import FindingCard from "@/components/optimizations/FindingCard";
 import EmptyClusterState from "@/components/EmptyClusterState";
 
+// Lower rank = shown first. Used so "Highest severity findings" surfaces
+// whatever the worst severity actually present is, rather than requiring a
+// literal "critical" match -- a cluster with only warning/info findings was
+// showing "No critical findings right now" even though it had open findings.
+const SEVERITY_RANK: Record<string, number> = { critical: 0, warning: 1, info: 2 };
+
 export default function DashboardPage() {
   const { selectedClusterId } = useAppStore();
   const [snapshot, setSnapshot] = useState<ClusterSnapshot | null>(null);
@@ -41,8 +47,11 @@ export default function DashboardPage() {
 
   if (!selectedClusterId) return <EmptyClusterState />;
 
-  const criticalFindings = findings.filter((f) => f.severity === "critical").slice(0, 3);
-  const openCount = findings.filter((f) => !["applied", "rejected", "dismissed"].includes(f.status)).length;
+  const openFindingsList = findings.filter((f) => !["applied", "rejected", "dismissed"].includes(f.status));
+  const highestSeverityFindings = [...openFindingsList]
+    .sort((a, b) => (SEVERITY_RANK[a.severity] ?? 99) - (SEVERITY_RANK[b.severity] ?? 99))
+    .slice(0, 3);
+  const openCount = openFindingsList.length;
   const pendingSafe = findings.filter((f) => f.action_type === "safe_auto" && f.status === "pending_approval").length;
 
   return (
@@ -76,10 +85,10 @@ export default function DashboardPage() {
       <div>
         <div style={{ fontWeight: 700, marginBottom: 10 }}>Highest severity findings</div>
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          {criticalFindings.length === 0 && (
-            <div style={{ fontSize: 13, color: "var(--text-muted)" }}>No critical findings right now.</div>
+          {highestSeverityFindings.length === 0 && (
+            <div style={{ fontSize: 13, color: "var(--text-muted)" }}>No open findings right now.</div>
           )}
-          {criticalFindings.map((f) => (
+          {highestSeverityFindings.map((f) => (
             <FindingCard key={f.finding_id} finding={f} onChanged={load} />
           ))}
         </div>

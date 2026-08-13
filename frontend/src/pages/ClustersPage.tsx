@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { RefreshCw, Trash2, Zap } from "lucide-react";
 import { api } from "@/api/client";
 import ClusterForm from "@/components/clusters/ClusterForm";
@@ -19,6 +19,7 @@ export default function ClustersPage() {
   const { selectedClusterId, setSelectedClusterId, clusters, refreshClusters } = useAppStore();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const [mode, setMode] = useState<"live" | "bundle">(searchParams.get("register") === "bundle" ? "bundle" : "live");
 
   async function refresh() {
@@ -102,11 +103,24 @@ export default function ClustersPage() {
                       className="cb-btn"
                       style={{ padding: "6px 10px" }}
                       disabled={busyId === c.cluster_id}
+                      title="Run analysis now"
                       onClick={async () => {
                         setBusyId(c.cluster_id);
-                        await api.runAnalysis(c.cluster_id);
-                        await refresh();
-                        setBusyId(null);
+                        try {
+                          await api.runAnalysis(c.cluster_id);
+                          await refresh();
+                          // Jump straight to the results rather than waiting on the
+                          // websocket broadcast to drive this -- we already have a
+                          // direct, reliable signal here (the awaited HTTP response),
+                          // so there's no reason to depend on a second round-trip for
+                          // an action the user just explicitly asked for. Also make
+                          // sure we're viewing the cluster that was actually analyzed,
+                          // in case it wasn't already the active one.
+                          setSelectedClusterId(c.cluster_id);
+                          navigate("/");
+                        } finally {
+                          setBusyId(null);
+                        }
                       }}
                     >
                       <Zap size={13} />

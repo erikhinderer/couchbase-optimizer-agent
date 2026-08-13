@@ -79,6 +79,18 @@ class StateStore:
     async def delete_cluster(self, cluster_id: UUID | str) -> None:
         async with self._lock:
             self._clusters.pop(str(cluster_id), None)
+            # Cascade: findings are keyed by cluster_id, and re-registering a
+            # cluster (even under the same name) always gets a fresh
+            # cluster_id (Cluster.cluster_id uses default_factory=uuid4).
+            # Without this, a deleted cluster's findings silently become
+            # orphaned garbage in state.json -- invisible in the UI (every
+            # list_findings call filters by the currently-registered
+            # cluster_id) but never actually removed, and a delete+re-add of
+            # the "same" cluster looks like the agent forgot everything it
+            # had found even though nothing was approved or rejected.
+            orphaned = [fid for fid, f in self._findings.items() if str(f.cluster_id) == str(cluster_id)]
+            for fid in orphaned:
+                self._findings.pop(fid, None)
             self._persist()
 
     # -- findings --------------------------------------------------------------
