@@ -4,6 +4,11 @@ A dockerized AI agent with a dashboard UI that continuously analyzes Couchbase E
 Couchbase Capella clusters, surfaces optimization opportunities, and safely applies the ones that
 need no application code change -- with a named-approver sign-off before anything runs.
 
+<img width="3456" height="1924" alt="image" src="https://github.com/user-attachments/assets/b599d353-1503-4950-af03-4d3431466e8c" />
+
+<img width="3456" height="1930" alt="image" src="https://github.com/user-attachments/assets/87d3be09-b5e3-45f1-9caf-e61758c80f82" />
+
+
 ## Capabilities
 
 - **Continuous analysis.** A background scheduler re-analyzes every registered cluster on a fixed
