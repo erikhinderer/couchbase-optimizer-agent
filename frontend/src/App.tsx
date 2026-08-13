@@ -62,6 +62,9 @@ export default function App() {
 
   const openFindings = findings.filter((f) => !["applied", "rejected", "dismissed"].includes(f.status));
   const pendingApproval = findings.filter((f) => f.action_type === "safe_auto" && f.status === "pending_approval");
+  // Matches OptimizationsSuggestedPage's own filter exactly, so the sidebar
+  // badge always agrees with what that page actually shows.
+  const needsCodeChange = findings.filter((f) => f.action_type === "requires_code_change");
 
   return (
     <div style={{ display: "flex", height: "100vh", background: "var(--bg-0)" }}>
@@ -89,7 +92,11 @@ export default function App() {
           </select>
         </div>
 
-        <NavTree insightsCount={openFindings.length} pendingApprovalCount={pendingApproval.length} />
+        <NavTree
+          insightsCount={openFindings.length}
+          pendingApprovalCount={pendingApproval.length}
+          needsCodeChangeCount={needsCodeChange.length}
+        />
 
         <div style={{ marginTop: "auto", padding: "8px", borderTop: "1px solid var(--border-subtle)", paddingTop: 12 }}>
           <AgentStatusIndicator />

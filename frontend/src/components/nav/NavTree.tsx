@@ -7,6 +7,7 @@ import {
 interface NavTreeProps {
   insightsCount: number;
   pendingApprovalCount: number;
+  needsCodeChangeCount: number;
 }
 
 interface Item {
@@ -37,7 +38,7 @@ function Group({ label, items }: { label: string; items: Item[] }) {
   );
 }
 
-export default function NavTree({ insightsCount, pendingApprovalCount }: NavTreeProps) {
+export default function NavTree({ insightsCount, pendingApprovalCount, needsCodeChangeCount }: NavTreeProps) {
   return (
     <nav style={{ display: "flex", flexDirection: "column" }}>
       <Group
@@ -59,7 +60,7 @@ export default function NavTree({ insightsCount, pendingApprovalCount }: NavTree
         items={[
           { to: "/optimizations/pending", icon: <ShieldCheck size={16} />, label: "Pending Approval", count: pendingApprovalCount },
           { to: "/optimizations/history", icon: <ClipboardList size={16} />, label: "Applied History" },
-          { to: "/optimizations/suggested", icon: <Lightbulb size={16} />, label: "Needs Code Change" },
+          { to: "/optimizations/suggested", icon: <Lightbulb size={16} />, label: "Needs Code Change", count: needsCodeChangeCount },
         ]}
       />
       <Group
