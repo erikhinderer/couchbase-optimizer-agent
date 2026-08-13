@@ -3,7 +3,7 @@
 AI agent with a dashboard UI that continuously analyzes Couchbase Enterprise and
 Couchbase Capella clusters, analyzes query and index optimization opportunities, and recommends optimizations. 
 
-The agent in READ-ONLY mode or from a support bundle recommends optimized queries and index opportunities. 
+The agent in READ-ONLY mode or from a support bundle, recommends optimized queries and index opportunities. 
 
 The agent in READ-WRITE mode can safely test changes in it's WASM sandbox and apply the ones that
 need no application code change -- with a named-approver sign-off before anything runs.
