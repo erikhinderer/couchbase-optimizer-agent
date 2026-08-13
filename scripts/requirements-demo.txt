@@ -1,0 +1,7 @@
+# Not part of any Docker image -- installed on your own machine to run
+# generate_demo_data.py against a real Couchbase Enterprise or Capella
+# cluster. Keep separate from requirements.txt (used only by the
+# memory-init container) so this doesn't bloat that image.
+couchbase==4.3.1
+requests==2.32.3
+Faker==33.1.0

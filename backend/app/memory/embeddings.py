@@ -1,0 +1,19 @@
+"""Helpers for turning agent events/context into embeddable text + vectors."""
+from __future__ import annotations
+
+from app.core.llm_client import LLMClient
+
+
+def summarize_for_embedding(kind: str, payload: dict) -> str:
+    """Flatten a structured memory event into a compact text blob for embedding."""
+    parts = [f"type={kind}"]
+    for k, v in payload.items():
+        if isinstance(v, (str, int, float, bool)) or v is None:
+            parts.append(f"{k}={v}")
+        else:
+            parts.append(f"{k}={str(v)[:200]}")
+    return " | ".join(parts)
+
+
+async def embed_text(text: str) -> list[float]:
+    return await LLMClient().embed(text)

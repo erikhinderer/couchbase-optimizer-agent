@@ -1,0 +1,139 @@
+# Pins the Compose project name so networks/volumes/containers stay scoped to
+# this stack regardless of the folder name it's extracted into.
+name: couchbase-optimizer-agent
+
+services:
+  # -- Agent memory: Couchbase Enterprise Edition (free developer license) --
+  # This is the optimizer agent's own short-term / episodic / long-term memory
+  # store, NOT one of the Couchbase clusters being optimized. Clusters under
+  # management (Enterprise or Capella) are registered separately via the UI/API
+  # and connected to over the network -- nothing about them lives in this stack.
+  #
+  # Licensing: the `couchbase:enterprise-*` image is free to run for internal
+  # development/testing/evaluation under Couchbase's Enterprise Free license. It
+  # converts to a paid subscription if used in production or if you engage
+  # Couchbase support -- see https://www.couchbase.com/legal/agreements/. Point
+  # MEMORY_CB_* at Capella instead if that doesn't fit.
+  agent-memory:
+    image: couchbase:enterprise-7.6.2
+    restart: unless-stopped
+    ports:
+      - "8091-8096:8091-8096"
+      - "11210-11211:11210-11211"
+    volumes:
+      - agent_memory_data:/opt/couchbase/var
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8091/pools"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 30s
+    networks: [coa-net]
+
+  # One-shot bootstrap: creates the agent-memory bucket/scopes/collections and
+  # the three memory-tier FTS vector indexes (short-term, episodic, long-term).
+  memory-init:
+    build:
+      context: .
+      dockerfile: scripts/Dockerfile.init
+    depends_on:
+      agent-memory:
+        condition: service_healthy
+    environment:
+      MEMORY_CB_HOST: agent-memory
+      MEMORY_CB_USERNAME: ${MEMORY_CB_USERNAME:-Administrator}
+      MEMORY_CB_PASSWORD: ${MEMORY_CB_PASSWORD:-change-me-strong-password}
+      MEMORY_CB_BUCKET: ${MEMORY_CB_BUCKET:-agent_memory}
+      MEMORY_CB_SCOPE: ${MEMORY_CB_SCOPE:-agent}
+    networks: [coa-net]
+    restart: on-failure:5
+
+  # -- Local LLM: served via an Ollama-compatible API -----------------------
+  # Runs on CPU by default. Local-first so cluster topology, query text, and
+  # index metadata pulled from a customer's production cluster never leave the
+  # Docker network. To use an NVIDIA GPU on Linux:
+  #   docker compose -f docker-compose.yml -f docker-compose.gpu.yml up
+  llm-service:
+    build: ./llm-service
+    restart: unless-stopped
+    volumes:
+      - ollama_data:/root/.ollama
+    ports:
+      - "11434:11434"
+    networks: [coa-net]
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list | grep -q \"${LLM_MODEL:-qwen3:8b}\""]
+      interval: 15s
+      timeout: 10s
+      retries: 60
+      start_period: 20s
+
+  # -- WASM sandbox: fuel-limited wasmtime runtime --------------------------
+  # Executes untrusted validation/what-if logic (index/config impact
+  # simulations, plan-cost estimators, generated test scripts) with no
+  # filesystem, network, or host access and a hard fuel/step budget, so the
+  # agent can "test" a suggested optimization before anyone approves it.
+  wasm-sandbox:
+    build: ./wasm-sandbox
+    restart: unless-stopped
+    ports:
+      - "8100:8100"
+    networks: [coa-net]
+    healthcheck:
+      # python:3.11-slim has no curl installed -- use the stdlib instead of
+      # adding a package just for the healthcheck.
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8100/healthz', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # -- FastAPI backend / analysis + optimization engine ---------------------
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      MEMORY_CB_CONNECTION_STRING: couchbase://agent-memory
+      LLM_BASE_URL: http://llm-service:11434
+      WASM_SANDBOX_URL: http://wasm-sandbox:8100
+    volumes:
+      - state_data:/data/state
+      - docs_cache:/data/docs-cache
+      - bundle_data:/data/bundles
+    ports:
+      - "8000:8000"
+    depends_on:
+      agent-memory:
+        condition: service_healthy
+      llm-service:
+        condition: service_healthy
+      wasm-sandbox:
+        condition: service_healthy
+    networks: [coa-net]
+
+  # -- React dark-mode UI ----------------------------------------------------
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8000}
+        VITE_WS_BASE_URL: ${VITE_WS_BASE_URL:-ws://localhost:8000}
+    restart: unless-stopped
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+    networks: [coa-net]
+
+networks:
+  coa-net:
+    driver: bridge
+
+volumes:
+  agent_memory_data:
+  ollama_data:
+  state_data:
+  docs_cache:
+  bundle_data:
